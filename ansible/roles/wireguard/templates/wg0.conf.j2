@@ -1,0 +1,37 @@
+{% if 'gateway' in group_names %}
+
+[Interface]
+Address = {{ wg_gateway_ip }}
+ListenPort = {{ wireguard_port }}
+PrivateKey = {{ wg_private_key }}
+
+{% if wg_server_enable_nat | default(false) %}
+PostUp   = iptables -A FORWARD -i {{ wireguard_interface }} -j ACCEPT; iptables -A FORWARD -o {{ wireguard_interface }} -j ACCEPT; iptables -t nat -A POSTROUTING -o {{ gateway_wan_iface }} -j MASQUERADE
+PostDown = iptables -D FORWARD -i {{ wireguard_interface }} -j ACCEPT; iptables -D FORWARD -o {{ wireguard_interface }} -j ACCEPT; iptables -t nat -D POSTROUTING -o {{ gateway_wan_iface }} -j MASQUERADE
+{% endif %}
+
+{% for host in groups['k3s_nodes'] %}
+[Peer]
+# {{ host }}
+PublicKey = {{ wg_peer_pubkeys[host] }}
+AllowedIPs = {{ hostvars[host]['wg_client_ip'] }}
+PersistentKeepalive = 25
+
+{% endfor %}
+
+{% else %}
+
+[Interface]
+Address = {{ wg_client_ip }}
+PrivateKey = {{ wg_private_key }}
+
+PostUp = ip route replace {{ lan_cidr }} via {{ lan_gateway }} dev {{ lan_iface }}
+PostDown = ip route del {{ lan_cidr }} via {{ lan_gateway }} dev {{ lan_iface }} || true
+
+[Peer]
+PublicKey = {{ wg_peer_pubkeys[groups['gateway'][0]] }}
+Endpoint = {{ wg_gateway_endpoint }}
+AllowedIPs = {{ wg_client_allowed_ips | join(', ') }}
+PersistentKeepalive = {{ wg_persistent_keepalive }}
+
+{% endif %}

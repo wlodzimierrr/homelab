@@ -1,0 +1,20 @@
+wireguard_interface: wg0
+wg_gateway_endpoint: "46.225.217.139:51820"
+
+# Full tunnel (internet via Hetzner)
+wg_client_allowed_ips:
+  - "0.0.0.0/0"
+
+wg_persistent_keepalive: 25
+
+# Your LAN subnet — keep local access to nodes
+lan_cidr: "192.168.50.0/24"
+
+# Node's normal LAN interface name (often eth0/enp*)
+# If you’re not sure, run: ip route | grep default
+lan_iface: "eno2"
+
+# Your home router IP on LAN
+lan_gateway: "192.168.50.1"
+
+wg_persistent_keepalive: 25

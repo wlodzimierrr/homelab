@@ -1,0 +1,9 @@
+homelab_lan_cidr: "192.168.50.0/24"
+
+wireguard_interface: wg0
+wireguard_port: 51820
+wg_gateway_ip: "10.100.0.1/24"
+
+# Enable NAT on gateway so nodes can reach internet
+wg_server_enable_nat: true
+gateway_wan_iface: "eth0"

@@ -1,0 +1,5 @@
+- name: Configure WireGuard gateway and k3s nodes
+  hosts: gateway:k3s_nodes
+  become: true
+  roles:
+    - wireguard

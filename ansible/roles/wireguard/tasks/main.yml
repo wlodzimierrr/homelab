@@ -1,0 +1,113 @@
+- name: Install WireGuard
+  apt:
+    name: wireguard
+    state: present
+    update_cache: yes
+
+- name: Ensure /etc/wireguard exists
+  file:
+    path: /etc/wireguard
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Generate private key if missing
+  shell: |
+    umask 077
+    test -f /etc/wireguard/privatekey || wg genkey > /etc/wireguard/privatekey
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Generate public key if missing
+  shell: |
+    umask 077
+    test -f /etc/wireguard/publickey || cat /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Read public key
+  slurp:
+    src: /etc/wireguard/publickey
+  register: wg_public_key_raw
+
+- name: Set wg_public_key fact
+  set_fact:
+    wg_public_key: "{{ wg_public_key_raw.content | b64decode | trim }}"
+
+- name: Read private key
+  slurp:
+    src: /etc/wireguard/privatekey
+  register: wg_private_key_raw
+
+- name: Set wg_private_key fact
+  set_fact:
+    wg_private_key: "{{ wg_private_key_raw.content | b64decode | trim }}"
+
+# Build peer map only on the gateway, after all hosts have wg_public_key
+- name: Initialize peer public key map on gateway
+  set_fact:
+    wg_peer_pubkeys: {}
+  when: inventory_hostname in groups['gateway']
+
+- name: Add node + gateway public keys into map (on gateway)
+  set_fact:
+    wg_peer_pubkeys: "{{ wg_peer_pubkeys | combine({ item: hostvars[item].wg_public_key }) }}"
+  loop: "{{ groups['k3s_nodes'] + groups['gateway'] }}"
+  when: inventory_hostname in groups['gateway']
+
+- name: Share peer public key map with all hosts
+  set_fact:
+    wg_peer_pubkeys: "{{ hostvars[groups['gateway'][0]].wg_peer_pubkeys }}"
+
+- name: Enable IPv4 forwarding on gateway
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: yes
+  when: "'gateway' in group_names"
+
+- name: Assert common WireGuard vars exist
+  assert:
+    that:
+      - wireguard_interface is defined
+      - wg_private_key is defined
+    fail_msg: "Missing common WireGuard vars on {{ inventory_hostname }} (wireguard_interface or wg_private_key)."
+
+- name: Assert gateway vars exist
+  assert:
+    that:
+      - wg_gateway_ip is defined
+      - wireguard_port is defined
+    fail_msg: "Missing gateway WireGuard vars on {{ inventory_hostname }} (wg_gateway_ip or wireguard_port)."
+  when: "'gateway' in group_names"
+
+- name: Assert client vars exist
+  assert:
+    that:
+      - wg_client_ip is defined
+      - wg_gateway_endpoint is defined
+      - wg_client_allowed_ips is defined
+      - lan_cidr is defined
+      - lan_gateway is defined
+      - lan_iface is defined
+    fail_msg: "Missing client WireGuard vars on {{ inventory_hostname }} (wg_client_ip / routing / endpoint)."
+  when: "'gateway' not in group_names"
+
+- name: Render WireGuard config
+  template:
+    src: wg0.conf.j2
+    dest: "/etc/wireguard/{{ wireguard_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart WireGuard
+
+- name: Enable and start WireGuard
+  systemd:
+    name: "wg-quick@{{ wireguard_interface }}"
+    enabled: true
+    state: started
