@@ -1,0 +1,61 @@
+- name: Pick first k3s server node
+  set_fact:
+    k3s_first_server: "{{ groups['k3s_servers'][0] }}"
+  run_once: true
+
+# Install MetalLB manifest (native mode)
+- name: Apply MetalLB manifests (run once on first server)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    sudo kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/{{ metallb_version }}/config/manifests/metallb-native.yaml
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ k3s_first_server }}"
+  run_once: true
+
+# Wait for pods
+- name: Wait for MetalLB controller rollout
+  ansible.builtin.shell: |
+    set -euo pipefail
+    sudo kubectl -n metallb-system rollout status deploy/controller --timeout=180s
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ k3s_first_server }}"
+  run_once: true
+
+- name: Wait for MetalLB speaker daemonset rollout
+  ansible.builtin.shell: |
+    set -euo pipefail
+    sudo kubectl -n metallb-system rollout status ds/speaker --timeout=180s
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ k3s_first_server }}"
+  run_once: true
+
+# Apply IPAddressPool + L2Advertisement
+- name: Render MetalLB address pool config to first server
+  ansible.builtin.template:
+    src: metallb-address-pool.yml.j2
+    dest: /tmp/metallb-address-pool.yml
+    mode: "0644"
+  delegate_to: "{{ k3s_first_server }}"
+  run_once: true
+
+- name: Apply MetalLB address pool config
+  ansible.builtin.shell: |
+    set -euo pipefail
+    sudo kubectl apply -f /tmp/metallb-address-pool.yml
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ k3s_first_server }}"
+  run_once: true
+
+# Show status for sanity
+- name: Show MetalLB resources
+  ansible.builtin.shell: |
+    sudo kubectl -n metallb-system get pods -o wide
+    echo "----"
+    sudo kubectl -n metallb-system get ipaddresspools,l2advertisements
+  delegate_to: "{{ k3s_first_server }}"
+  run_once: true
+  changed_when: false

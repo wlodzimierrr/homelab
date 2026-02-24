@@ -1,0 +1,5 @@
+- name: Install MetalLB on k3s cluster
+  hosts: k3s_servers
+  gather_facts: false
+  roles:
+    - metallb
