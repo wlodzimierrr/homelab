@@ -46,17 +46,18 @@
   set_fact:
     wg_private_key: "{{ wg_private_key_raw.content | b64decode | trim }}"
 
-# Build peer map only on the gateway, after all hosts have wg_public_key
-- name: Initialize peer public key map on gateway
+- name: Initialize peer public key map (run once on gateway)
   set_fact:
     wg_peer_pubkeys: {}
-  when: inventory_hostname in groups['gateway']
+  run_once: true
+  delegate_to: "{{ groups['gateway'][0] }}"
 
-- name: Add node + gateway public keys into map (on gateway)
+- name: Add node + gateway public keys into map (run once on gateway)
   set_fact:
     wg_peer_pubkeys: "{{ wg_peer_pubkeys | combine({ item: hostvars[item].wg_public_key }) }}"
   loop: "{{ groups['k3s_nodes'] + groups['gateway'] }}"
-  when: inventory_hostname in groups['gateway']
+  run_once: true
+  delegate_to: "{{ groups['gateway'][0] }}"
 
 - name: Share peer public key map with all hosts
   set_fact:

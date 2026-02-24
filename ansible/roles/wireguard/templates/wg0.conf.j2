@@ -25,9 +25,6 @@ PersistentKeepalive = 25
 Address = {{ wg_client_ip }}
 PrivateKey = {{ wg_private_key }}
 
-PostUp = ip route replace {{ lan_cidr }} via {{ lan_gateway }} dev {{ lan_iface }}
-PostDown = ip route del {{ lan_cidr }} via {{ lan_gateway }} dev {{ lan_iface }} || true
-
 [Peer]
 PublicKey = {{ wg_peer_pubkeys[groups['gateway'][0]] }}
 Endpoint = {{ wg_gateway_endpoint }}

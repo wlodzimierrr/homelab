@@ -3,7 +3,7 @@ wg_gateway_endpoint: "46.225.217.139:51820"
 
 # Full tunnel (internet via Hetzner)
 wg_client_allowed_ips:
-  - "0.0.0.0/0"
+  - "10.100.0.0/24"
 
 wg_persistent_keepalive: 25
 

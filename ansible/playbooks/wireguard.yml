@@ -1,4 +1,75 @@
-- name: Configure WireGuard gateway and k3s nodes
+---
+- name: WireGuard - prepare keys on gateway + nodes
+  hosts: gateway:k3s_nodes
+  become: true
+  tasks:
+    - name: Install WireGuard
+      apt:
+        name: wireguard
+        state: present
+        update_cache: yes
+
+    - name: Ensure /etc/wireguard exists
+      file:
+        path: /etc/wireguard
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Generate private key if missing
+      shell: |
+        umask 077
+        test -f /etc/wireguard/privatekey || wg genkey > /etc/wireguard/privatekey
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Generate public key if missing
+      shell: |
+        umask 077
+        test -f /etc/wireguard/publickey || cat /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Read public key
+      slurp:
+        src: /etc/wireguard/publickey
+      register: wg_public_key_raw
+
+    - name: Set wg_public_key fact
+      set_fact:
+        wg_public_key: "{{ wg_public_key_raw.content | b64decode | trim }}"
+
+    - name: Read private key
+      slurp:
+        src: /etc/wireguard/privatekey
+      register: wg_private_key_raw
+
+    - name: Set wg_private_key fact
+      set_fact:
+        wg_private_key: "{{ wg_private_key_raw.content | b64decode | trim }}"
+
+    # Build peer map ONCE on gateway, after all hosts have wg_public_key
+    - name: Initialize peer public key map (run once on gateway)
+      set_fact:
+        wg_peer_pubkeys: {}
+      run_once: true
+      delegate_to: "{{ groups['gateway'][0] }}"
+
+    - name: Add node + gateway public keys into map (run once on gateway)
+      set_fact:
+        wg_peer_pubkeys: "{{ wg_peer_pubkeys | combine({ item: hostvars[item].wg_public_key }) }}"
+      loop: "{{ groups['k3s_nodes'] + groups['gateway'] }}"
+      run_once: true
+      delegate_to: "{{ groups['gateway'][0] }}"
+
+    - name: Share peer public key map with all hosts
+      set_fact:
+        wg_peer_pubkeys: "{{ hostvars[groups['gateway'][0]].wg_peer_pubkeys }}"
+
+- name: WireGuard - render config + enable service
   hosts: gateway:k3s_nodes
   become: true
   roles:
