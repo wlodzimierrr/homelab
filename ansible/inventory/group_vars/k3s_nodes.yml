@@ -16,5 +16,3 @@ lan_iface: "eno2"
 
 # Your home router IP on LAN
 lan_gateway: "192.168.50.1"
-
-wg_persistent_keepalive: 25

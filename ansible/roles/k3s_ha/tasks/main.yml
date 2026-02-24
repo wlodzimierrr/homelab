@@ -1,0 +1,50 @@
+- name: Ensure curl is installed
+  apt:
+    name: curl
+    state: present
+    update_cache: yes
+
+- name: Check if k3s is already installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install first k3s server (cluster-init)
+  shell: |
+    set -euo pipefail
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}" sh -s - \
+      server \
+      --cluster-init \
+      --token "{{ k3s_token }}" \
+      --node-ip "{{ k3s_node_ip  }}" \
+      --advertise-address "{{ k3s_node_ip  }}" \
+      --flannel-iface "{{ k3s_flannel_iface }}" \
+      {% for d in k3s_disable %}--disable {{ d }} {% endfor %}
+  args:
+    executable: /bin/bash
+  when:
+    - inventory_hostname == groups['k3s_servers'][0]
+    - not k3s_binary.stat.exists
+
+- name: Install remaining k3s servers (join)
+  shell: |
+    set -euo pipefail
+    curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="{{ k3s_version }}" sh -s - \
+      server \
+      --server "https://{{ hostvars[groups['k3s_servers'][0]].k3s_node_ip }}:6443" \
+      --token "{{ k3s_token }}" \
+      --node-ip "{{ k3s_node_ip }}" \
+      --advertise-address "{{ k3s_node_ip }}" \
+      --flannel-iface "{{ k3s_flannel_iface }}" \
+      {% for d in k3s_disable %}--disable {{ d }} {% endfor %}
+  args:
+    executable: /bin/bash
+  when:
+    - inventory_hostname != groups['k3s_servers'][0]
+    - not k3s_binary.stat.exists
+
+- name: Ensure k3s service is enabled and running
+  systemd:
+    name: k3s
+    enabled: true
+    state: started
