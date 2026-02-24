@@ -1,0 +1,7 @@
+# Traefik service settings
+traefik_namespace: kube-system
+traefik_service_name: traefik
+
+# Pick ONE:
+traefik_lb_ip: "192.168.50.240"   # fixed IP from your MetalLB pool
+# traefik_lb_ip: ""               # leave empty for dynamic assignment

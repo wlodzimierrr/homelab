@@ -1,0 +1,49 @@
+- name: Expose Traefik via MetalLB LoadBalancer
+  hosts: k3s_servers[0]
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Ensure Traefik service is LoadBalancer (and optionally set fixed IP)
+      shell: |
+        set -euo pipefail
+
+        NS="{{ traefik_namespace }}"
+        SVC="{{ traefik_service_name }}"
+
+        # Patch service type -> LoadBalancer
+        kubectl -n "$NS" patch svc "$SVC" --type merge -p '{"spec":{"type":"LoadBalancer"}}'
+
+        # If fixed IP requested, set MetalLB annotation (ipAddressPools is optional here)
+        {% if traefik_lb_ip | default('') | length > 0 %}
+        kubectl -n "$NS" annotate svc "$SVC" metallb.universe.tf/loadBalancerIPs="{{ traefik_lb_ip }}" --overwrite
+        {% endif %}
+      args:
+        executable: /bin/bash
+
+    - name: Wait for Traefik external IP
+      shell: |
+        set -euo pipefail
+        NS="{{ traefik_namespace }}"
+        SVC="{{ traefik_service_name }}"
+
+        for i in $(seq 1 60); do
+          IP="$(kubectl -n "$NS" get svc "$SVC" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+          if [ -n "$IP" ]; then
+            echo "$IP"
+            exit 0
+          fi
+          sleep 2
+        done
+
+        echo "Timed out waiting for external IP on $NS/$SVC" >&2
+        kubectl -n "$NS" get svc "$SVC" -o wide >&2 || true
+        exit 1
+      args:
+        executable: /bin/bash
+      register: traefik_lb_ip_result
+      changed_when: false
+
+    - name: Show Traefik LoadBalancer IP
+      debug:
+        msg: "Traefik external IP is {{ traefik_lb_ip_result.stdout }}"
