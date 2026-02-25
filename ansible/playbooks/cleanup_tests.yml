@@ -1,0 +1,14 @@
+- name: Cleanup test resources
+  hosts: k3s_servers[0]
+  become: true
+  tasks:
+    - name: Delete whoami namespace (ignore if missing)
+      shell: |
+        set -e
+        kubectl delete ns whoami --ignore-not-found=true
+
+    - name: Delete metallb test service/deploy (ignore if missing)
+      shell: |
+        set -e
+        kubectl delete deploy nginx-lb-test --ignore-not-found=true
+        kubectl delete svc nginx-lb-test --ignore-not-found=true
