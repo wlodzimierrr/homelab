@@ -98,6 +98,17 @@
     fail_msg: "Missing client WireGuard vars on {{ inventory_hostname }} (wg_client_ip / routing / endpoint)."
   when: "'gateway' not in group_names"
 
+- name: Install iptables if NAT is enabled (gateway)
+  apt:
+    name:
+      - iptables
+      - iptables-persistent
+    state: present
+    update_cache: yes
+  when:
+    - "'gateway' in group_names"
+    - wg_server_enable_nat | default(false)
+
 - name: Render WireGuard config
   template:
     src: wg0.conf.j2

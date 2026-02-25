@@ -14,7 +14,7 @@ PostDown = iptables -D FORWARD -i {{ wireguard_interface }} -j ACCEPT; iptables 
 [Peer]
 # {{ host }}
 PublicKey = {{ wg_peer_pubkeys[host] }}
-AllowedIPs = {{ hostvars[host]['wg_client_ip'] }}
+AllowedIPs = {{ ([hostvars[host]['wg_client_ip']] + (hostvars[host].wg_extra_allowed_ips | default([]))) | join(', ') }}
 PersistentKeepalive = 25
 
 {% endfor %}

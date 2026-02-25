@@ -1,2 +1,4 @@
 wg_client_ip: "10.100.0.11/32"
 k3s_node_ip: 192.168.50.24
+wg_extra_allowed_ips:
+  - "192.168.50.240/32"

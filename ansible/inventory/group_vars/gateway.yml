@@ -7,3 +7,5 @@ wg_gateway_ip: "10.100.0.1/24"
 # Enable NAT on gateway so nodes can reach internet
 wg_server_enable_nat: true
 gateway_wan_iface: "eth0"
+
+traefik_vip: "192.168.50.240"
