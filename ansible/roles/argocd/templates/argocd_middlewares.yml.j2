@@ -1,0 +1,39 @@
+{% if argocd_enable_http_redirect | default(false) %}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: argocd-redirect-https
+  namespace: {{ argocd_namespace }}
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+{% endif %}
+
+{% if argocd_enable_basic_auth | default(false) %}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: argocd-basic-auth
+  namespace: {{ argocd_namespace }}
+spec:
+  basicAuth:
+    secret: {{ argocd_basic_auth_secret_name }}
+---
+{% endif %}
+
+{% if argocd_enable_ip_allowlist | default(false) %}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: argocd-ip-allowlist
+  namespace: {{ argocd_namespace }}
+spec:
+  ipWhiteList:
+    sourceRange:
+{% for cidr in (argocd_allowlist_source_ranges | default([])) %}
+      - "{{ cidr }}"
+{% endfor %}
+---
+{% endif %}

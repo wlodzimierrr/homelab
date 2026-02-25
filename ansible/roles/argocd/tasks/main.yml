@@ -1,0 +1,172 @@
+---
+- name: Assert required Argo CD vars
+  assert:
+    that:
+      - argocd_version is defined
+      - argocd_namespace is defined
+      - argocd_hostname is defined
+      - clusterissuer_name is defined
+      - traefik_ingress_class is defined
+      - argocd_tls_secret is defined
+    fail_msg: "Missing required Argo CD vars (see inventory/group_vars/k3s_servers/argocd.yml)."
+
+- name: Create argocd namespace
+  shell: |
+    set -euo pipefail
+    kubectl create ns {{ argocd_namespace }} --dry-run=client -o yaml | kubectl apply -f -
+  args:
+    executable: /bin/bash
+
+- name: Install Argo CD (upstream manifests)
+  shell: |
+    set -euo pipefail
+    kubectl apply -n {{ argocd_namespace }} -f https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml
+  args:
+    executable: /bin/bash
+
+- name: Wait for Argo CD workloads (deployments + statefulsets)
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+
+    # deployments (not all exist in every version; check first)
+    for d in argocd-server argocd-repo-server argocd-applicationset-controller argocd-dex-server argocd-redis argocd-notifications-controller; do
+      if kubectl -n "$ns" get deploy "$d" >/dev/null 2>&1; then
+        kubectl -n "$ns" rollout status "deploy/$d" --timeout=300s
+      fi
+    done
+
+    # statefulset (application controller is a STS in newer versions)
+    if kubectl -n "$ns" get sts argocd-application-controller >/dev/null 2>&1; then
+      kubectl -n "$ns" rollout status "sts/argocd-application-controller" --timeout=300s
+    fi
+  args:
+    executable: /bin/bash
+
+- name: Ensure argocd-server runs with --insecure (Traefik terminates TLS)
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+    if kubectl -n "$ns" get deploy argocd-server >/dev/null 2>&1; then
+      if ! kubectl -n "$ns" get deploy argocd-server -o json | grep -q -- '"--insecure"'; then
+        kubectl -n "$ns" patch deploy argocd-server --type='json' -p='[
+          {"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--insecure"}
+        ]'
+      fi
+      kubectl -n "$ns" rollout status deploy/argocd-server --timeout=180s
+    fi
+  args:
+    executable: /bin/bash
+
+# -----------------------------
+# Optional: basic-auth secret
+# -----------------------------
+- name: Assert basic-auth vars when enabled
+  assert:
+    that:
+      - argocd_basic_auth_secret_name is defined
+      - argocd_basic_auth_users is defined
+      - (argocd_basic_auth_users | length) > 0
+    fail_msg: "Basic auth enabled but argocd_basic_auth_secret_name/argocd_basic_auth_users missing."
+  when: argocd_enable_basic_auth | default(false)
+
+- name: Render basic-auth secret (htpasswd lines)
+  template:
+    src: middleware-basic-auth-secret.yml.j2
+    dest: /tmp/argocd-basic-auth-secret.yml
+    mode: "0644"
+  when: argocd_enable_basic_auth | default(false)
+
+- name: Apply basic-auth secret
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-basic-auth-secret.yml
+  args:
+    executable: /bin/bash
+  when: argocd_enable_basic_auth | default(false)
+
+# -----------------------------
+# Optional: IP allowlist
+# -----------------------------
+- name: Assert allowlist vars when enabled
+  assert:
+    that:
+      - argocd_allowlist_source_ranges is defined
+      - (argocd_allowlist_source_ranges | length) > 0
+    fail_msg: "IP allowlist enabled but argocd_allowlist_source_ranges is missing/empty."
+  when: argocd_enable_ip_allowlist | default(false)
+
+# -----------------------------
+# Traefik middlewares (CRDs)
+# -----------------------------
+- name: Render Traefik middlewares bundle (redirect/auth/allowlist)
+  template:
+    src: argocd_middlewares.yml.j2
+    dest: /tmp/argocd-middlewares.yml
+    mode: "0644"
+
+- name: Validate rendered middleware YAML (kubectl client dry-run)
+  shell: |
+    set -euo pipefail
+    kubectl apply --dry-run=client -f /tmp/argocd-middlewares.yml >/dev/null
+  args:
+    executable: /bin/bash
+
+- name: Apply Traefik middlewares
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-middlewares.yml
+  args:
+    executable: /bin/bash
+
+# -----------------------------
+# Ingress
+# -----------------------------
+- name: Render Argo CD Ingress (Traefik + TLS)
+  template:
+    src: argocd_ingress.yml.j2
+    dest: /tmp/argocd-ingress.yml
+    mode: "0644"
+
+- name: Validate rendered Argo CD Ingress YAML (kubectl client dry-run)
+  shell: |
+    set -euo pipefail
+    kubectl apply --dry-run=client -f /tmp/argocd-ingress.yml >/dev/null
+  args:
+    executable: /bin/bash
+
+- name: Apply Argo CD Ingress
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-ingress.yml
+    kubectl -n {{ argocd_namespace }} get ingress -o wide
+  args:
+    executable: /bin/bash
+
+- name: Show cert-manager status for Argo CD
+  shell: |
+    set -euo pipefail
+    kubectl -n {{ argocd_namespace }} get certificate,order,challenge -o wide || true
+  args:
+    executable: /bin/bash
+
+- name: Print initial admin password (Argo CD internal admin)
+  shell: |
+    set -euo pipefail
+    echo "Argo CD initial login:"
+    echo "  URL: https://{{ argocd_hostname }}"
+    echo "  User: admin"
+    echo -n "  Pass: "
+    kubectl -n {{ argocd_namespace }} get secret argocd-initial-admin-secret \
+      -o jsonpath="{.data.password}" | base64 -d
+    echo
+  args:
+    executable: /bin/bash
+
+- name: Show Argo CD ingress + cert status
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+    kubectl -n "$ns" get ingress,certificate -o wide
+  args:
+    executable: /bin/bash

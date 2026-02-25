@@ -1,0 +1,62 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: {{ argocd_namespace }}
+  annotations:
+    kubernetes.io/ingress.class: {{ traefik_ingress_class }}
+    cert-manager.io/cluster-issuer: {{ clusterissuer_name }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+{% set mws = [] %}
+{% if argocd_enable_basic_auth | default(false) %}
+{%   set _ = mws.append(argocd_namespace ~ "-argocd-basic-auth@kubernetescrd") %}
+{% endif %}
+{% if argocd_enable_ip_allowlist | default(false) %}
+{%   set _ = mws.append(argocd_namespace ~ "-argocd-ip-allowlist@kubernetescrd") %}
+{% endif %}
+{% if mws | length > 0 %}
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ mws | join(',') }}"
+{% endif %}
+spec:
+  ingressClassName: {{ traefik_ingress_class }}
+  tls:
+    - hosts:
+        - {{ argocd_hostname }}
+      secretName: {{ argocd_tls_secret }}
+  rules:
+    - host: {{ argocd_hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+---
+{% if argocd_enable_http_redirect | default(false) %}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-redirect
+  namespace: {{ argocd_namespace }}
+  annotations:
+    kubernetes.io/ingress.class: {{ traefik_ingress_class }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ argocd_namespace }}-argocd-redirect-https@kubernetescrd"
+spec:
+  ingressClassName: {{ traefik_ingress_class }}
+  rules:
+    - host: {{ argocd_hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+{% endif %}

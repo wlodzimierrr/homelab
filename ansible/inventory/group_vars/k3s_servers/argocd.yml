@@ -1,0 +1,22 @@
+argocd_version: "v2.12.4"
+argocd_namespace: "argocd"
+argocd_hostname: "argocd.wlodzimierrr.co.uk"
+
+traefik_ingress_class: "traefik"
+clusterissuer_name: "letsencrypt-http01"
+argocd_tls_secret: "argocd-tls"
+
+argocd_enable_http_redirect: true
+
+argocd_enable_basic_auth: true
+argocd_basic_auth_secret_name: "argocd-basic-auth"
+argocd_basic_auth_users:
+  - "wlodzimierrr:$2y$05$voQCOpNZ61BGPd/3Re1MjuMNR56DUISXkWEPJM1iAOiF8ZPGreKJG"
+
+argocd_enable_ip_allowlist: false
+
+# argocd_enable_ip_allowlist: true
+# argocd_allowlist_source_ranges:
+#   - "10.100.0.0/24"
+#   - "192.168.50.0/24"
+#   - "46.225.217.139/32"

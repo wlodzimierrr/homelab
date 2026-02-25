@@ -1,0 +1,8 @@
+---
+- name: Install Argo CD via role and expose via Traefik + TLS
+  hosts: k3s_servers[0]
+  become: true
+  gather_facts: false
+
+  roles:
+    - argocd
