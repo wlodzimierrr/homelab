@@ -1,6 +1,8 @@
 - name: Forward 80/443 on Hetzner to Traefik VIP over WireGuard
   hosts: gateway
   become: true
+  vars:
+    traefik_vip: "192.168.50.240"   # or put in group_vars/gateway.yml
   tasks:
     - name: Enable forwarding
       sysctl:
@@ -9,23 +11,39 @@
         state: present
         reload: yes
 
-    - name: DNAT 80/443 to Traefik VIP (iptables)
+    - name: DNAT 80/443 to Traefik VIP
       shell: |
-        set -e
-        iptables -t nat -C PREROUTING -i eth0 -p tcp --dport 80  -j DNAT --to-destination {{ traefik_vip }}:80  2>/dev/null || \
-          iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80  -j DNAT --to-destination {{ traefik_vip }}:80
+        set -euo pipefail
+        iptables -t nat -C PREROUTING -i {{ gateway_wan_iface }} -p tcp --dport 80  -j DNAT --to-destination {{ traefik_vip }}:80  2>/dev/null || \
+          iptables -t nat -A PREROUTING -i {{ gateway_wan_iface }} -p tcp --dport 80  -j DNAT --to-destination {{ traefik_vip }}:80
 
-        iptables -t nat -C PREROUTING -i eth0 -p tcp --dport 443 -j DNAT --to-destination {{ traefik_vip }}:443 2>/dev/null || \
-          iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 443 -j DNAT --to-destination {{ traefik_vip }}:443
+        iptables -t nat -C PREROUTING -i {{ gateway_wan_iface }} -p tcp --dport 443 -j DNAT --to-destination {{ traefik_vip }}:443 2>/dev/null || \
+          iptables -t nat -A PREROUTING -i {{ gateway_wan_iface }} -p tcp --dport 443 -j DNAT --to-destination {{ traefik_vip }}:443
 
         iptables -C FORWARD -p tcp -d {{ traefik_vip }} --dport 80  -j ACCEPT 2>/dev/null || iptables -A FORWARD -p tcp -d {{ traefik_vip }} --dport 80  -j ACCEPT
         iptables -C FORWARD -p tcp -d {{ traefik_vip }} --dport 443 -j ACCEPT 2>/dev/null || iptables -A FORWARD -p tcp -d {{ traefik_vip }} --dport 443 -j ACCEPT
+      args:
+        executable: /bin/bash
 
-    - name: (Optional but recommended) Persist iptables rules
-      apt:
-        name: iptables-persistent
-        state: present
-        update_cache: yes
+    - name: SNAT replies back through gateway (fix return path)
+      shell: |
+        set -euo pipefail
+        iptables -t nat -C POSTROUTING -o {{ wireguard_interface }} -p tcp -d {{ traefik_vip }} --dport 80  -j MASQUERADE 2>/dev/null || \
+          iptables -t nat -A POSTROUTING -o {{ wireguard_interface }} -p tcp -d {{ traefik_vip }} --dport 80  -j MASQUERADE
 
-    - name: Save rules
+        iptables -t nat -C POSTROUTING -o {{ wireguard_interface }} -p tcp -d {{ traefik_vip }} --dport 443 -j MASQUERADE 2>/dev/null || \
+          iptables -t nat -A POSTROUTING -o {{ wireguard_interface }} -p tcp -d {{ traefik_vip }} --dport 443 -j MASQUERADE
+      args:
+        executable: /bin/bash
+
+    - name: Install iptables-persistent (noninteractive)
+      shell: |
+        set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y
+        apt-get install -y iptables-persistent
+      args:
+        executable: /bin/bash
+
+    - name: Save firewall rules
       shell: netfilter-persistent save
