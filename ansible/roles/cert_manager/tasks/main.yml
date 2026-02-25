@@ -1,0 +1,39 @@
+- name: Assert required vars
+  assert:
+    that:
+      - cert_manager_version is defined
+      - lets_encrypt_email is defined
+      - lets_encrypt_server is defined
+      - clusterissuer_name is defined
+      - acme_ingress_class is defined
+    fail_msg: "Missing required cert-manager/ACME vars in group_vars."
+
+- name: Install cert-manager CRDs + controllers
+  shell: |
+    set -euo pipefail
+    sudo kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.yaml
+  args:
+    executable: /bin/bash
+
+- name: Wait for cert-manager deployments to be ready
+  shell: |
+    set -euo pipefail
+    sudo kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
+    sudo kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+    sudo kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
+  args:
+    executable: /bin/bash
+
+- name: Render ClusterIssuer manifest
+  template:
+    src: clusterissuer.yml.j2
+    dest: /tmp/clusterissuer.yml
+    mode: "0644"
+
+- name: Apply ClusterIssuer
+  shell: |
+    set -euo pipefail
+    sudo kubectl apply -f /tmp/clusterissuer.yml
+    sudo kubectl get clusterissuer {{ clusterissuer_name }} -o wide
+  args:
+    executable: /bin/bash

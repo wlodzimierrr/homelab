@@ -14,3 +14,16 @@ metallb_l2adv_name: "homelab-l2"
 # IMPORTANT: must be outside DHCP
 metallb_addresses:
   - "192.168.50.240-192.168.50.250"
+
+cert_manager_version: "v1.14.6"
+
+lets_encrypt_email: "wlodzimierrr@gmail.com"
+lets_encrypt_server: "https://acme-v02.api.letsencrypt.org/directory"
+# for testing without rate limits:
+# lets_encrypt_server: "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+clusterissuer_name: "letsencrypt-http01"
+
+# Traefik settings
+traefik_ingress_class: "traefik"
+acme_ingress_class: "traefik"

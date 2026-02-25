@@ -1,0 +1,22 @@
+- name: Cleanup cert-manager test namespace (whoami-tls)
+  hosts: k3s_servers[0]
+  become: true
+  gather_facts: false
+
+  vars:
+    test_ns: "whoami-tls"
+
+  tasks:
+    - name: Delete test namespace
+      shell: |
+        set -euo pipefail
+        kubectl delete ns {{ test_ns }} --ignore-not-found
+      args:
+        executable: /bin/bash
+
+    - name: Show remaining ClusterIssuers
+      shell: |
+        set -euo pipefail
+        kubectl get clusterissuer -o wide
+      args:
+        executable: /bin/bash

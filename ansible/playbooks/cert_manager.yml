@@ -1,0 +1,7 @@
+- name: Install cert-manager and ClusterIssuer
+  hosts: k3s_servers[0]
+  become: true
+  gather_facts: true
+
+  roles:
+    - cert_manager
