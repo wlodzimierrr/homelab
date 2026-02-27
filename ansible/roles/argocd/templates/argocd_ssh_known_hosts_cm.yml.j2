@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-ssh-known-hosts-cm
+  namespace: {{ argocd_namespace }}
+data:
+  ssh_known_hosts: |
+{% for line in (argocd_ssh_known_hosts_entries | default([])) %}
+    {{ line }}
+{% endfor %}

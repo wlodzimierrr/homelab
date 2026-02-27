@@ -8,7 +8,63 @@ argocd_tls_secret: "argocd-tls"
 
 argocd_enable_http_redirect: true
 
-argocd_enable_basic_auth: true
+argocd_enable_rbac_config: true
+argocd_rbac_policy_default: "role:readonly"
+argocd_rbac_scopes: "[groups]"
+argocd_rbac_policy_csv_lines:
+  - "g, team-admins, role:admin"
+  - "g, team-developers, role:edit"
+  - "p, role:edit, applications, *, argocd/*, allow"
+argocd_rbac_extra_data: {}
+
+argocd_enable_main_config: true
+argocd_cm_data:
+  url: "https://argocd.wlodzimierrr.co.uk"
+  "server.insecure": "false"
+  "admin.enabled": "false"
+
+argocd_enable_local_accounts: true
+argocd_local_accounts_password_mtime: "2026-01-01T00:00:00Z"
+argocd_local_accounts:
+  - username: "wlodzimierrr"
+    capabilities: ["login", "apiKey"]
+    password_hash: "$2y$05$voQCOpNZ61BGPd/3Re1MjuMNR56DUISXkWEPJM1iAOiF8ZPGreKJG"
+    password_mtime: "2026-01-01T00:00:00Z"
+
+argocd_enable_ssh_known_hosts_config: false
+argocd_ssh_known_hosts_entries: []
+
+argocd_enable_server_security_patch: true
+argocd_server_deployment_patch:
+  spec:
+    template:
+      spec:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          fsGroup: 999
+        containers:
+          - name: argocd-server
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+
+argocd_enable_network_policy: true
+argocd_network_policy_allow_same_namespace: true
+argocd_networkpolicy_ingress_from:
+  - namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: traefik
+
+argocd_show_initial_admin_password: false
+
+argocd_enable_basic_auth: false
 argocd_basic_auth_secret_name: "argocd-basic-auth"
 argocd_basic_auth_users:
   - "wlodzimierrr:$2y$05$voQCOpNZ61BGPd/3Re1MjuMNR56DUISXkWEPJM1iAOiF8ZPGreKJG"
