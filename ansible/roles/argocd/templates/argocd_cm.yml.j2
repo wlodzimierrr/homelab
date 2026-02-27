@@ -3,6 +3,9 @@ kind: ConfigMap
 metadata:
   name: argocd-cm
   namespace: {{ argocd_namespace }}
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
 data:
 {% for key, value in (argocd_cm_data | default({}) | dictsort) %}
 {% if '\n' in (value | string) %}
