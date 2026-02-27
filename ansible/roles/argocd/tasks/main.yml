@@ -24,6 +24,175 @@
   args:
     executable: /bin/bash
 
+- name: Assert RBAC policy lines when custom RBAC is enabled
+  assert:
+    that:
+      - argocd_rbac_policy_csv_lines is defined
+      - (argocd_rbac_policy_csv_lines | length) > 0
+    fail_msg: "Custom RBAC enabled but argocd_rbac_policy_csv_lines is missing/empty."
+  when: argocd_enable_rbac_config | default(false)
+
+- name: Render Argo CD RBAC ConfigMap
+  template:
+    src: argocd_rbac_cm.yml.j2
+    dest: /tmp/argocd-rbac-cm.yml
+    mode: "0644"
+  when: argocd_enable_rbac_config | default(false)
+
+- name: Validate Argo CD RBAC ConfigMap YAML (kubectl client dry-run)
+  shell: |
+    set -euo pipefail
+    kubectl apply --dry-run=client -f /tmp/argocd-rbac-cm.yml >/dev/null
+  args:
+    executable: /bin/bash
+  when: argocd_enable_rbac_config | default(false)
+
+- name: Apply Argo CD RBAC ConfigMap
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-rbac-cm.yml
+  args:
+    executable: /bin/bash
+  when: argocd_enable_rbac_config | default(false)
+
+- name: Render Argo CD main ConfigMap
+  template:
+    src: argocd_cm.yml.j2
+    dest: /tmp/argocd-cm.yml
+    mode: "0644"
+  when: argocd_enable_main_config | default(false)
+
+- name: Validate Argo CD main ConfigMap YAML (kubectl client dry-run)
+  shell: |
+    set -euo pipefail
+    kubectl apply --dry-run=client -f /tmp/argocd-cm.yml >/dev/null
+  args:
+    executable: /bin/bash
+  when: argocd_enable_main_config | default(false)
+
+- name: Apply Argo CD main ConfigMap
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-cm.yml
+  args:
+    executable: /bin/bash
+  when: argocd_enable_main_config | default(false)
+
+- name: Assert local account vars when local Argo CD accounts are enabled
+  assert:
+    that:
+      - argocd_local_accounts is defined
+      - (argocd_local_accounts | length) > 0
+      - (argocd_local_accounts | map(attribute='username') | list | length) == (argocd_local_accounts | map(attribute='username') | unique | list | length)
+      - argocd_local_accounts | selectattr('username', 'defined') | list | length == (argocd_local_accounts | length)
+      - argocd_local_accounts | selectattr('capabilities', 'defined') | list | length == (argocd_local_accounts | length)
+      - argocd_local_accounts | selectattr('password_hash', 'defined') | list | length == (argocd_local_accounts | length)
+    fail_msg: "Local accounts enabled but argocd_local_accounts is missing required username/capabilities/password_hash fields."
+  when: argocd_enable_local_accounts | default(false)
+
+- name: Build argocd-cm patch data for local accounts
+  set_fact:
+    argocd_local_accounts_cm_patch_data: "{{ argocd_local_accounts_cm_patch_data | default({}) | combine({ ('accounts.' ~ item.username): (item.capabilities | join(',')) }) }}"
+  loop: "{{ argocd_local_accounts | default([]) }}"
+  when: argocd_enable_local_accounts | default(false)
+
+- name: Patch argocd-cm with local accounts capabilities
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+    kubectl -n "$ns" patch configmap argocd-cm --type='merge' -p='{{ {"data": (argocd_local_accounts_cm_patch_data | default({}))} | to_json }}'
+  args:
+    executable: /bin/bash
+  when: argocd_enable_local_accounts | default(false)
+
+- name: Build argocd-secret patch data for local account password hashes
+  set_fact:
+    argocd_local_accounts_secret_patch_data: "{{ argocd_local_accounts_secret_patch_data | default({}) | combine({ ('accounts.' ~ item.username ~ '.password'): item.password_hash, ('accounts.' ~ item.username ~ '.passwordMtime'): (item.password_mtime | default(argocd_local_accounts_password_mtime)) }) }}"
+  loop: "{{ argocd_local_accounts | default([]) }}"
+  when: argocd_enable_local_accounts | default(false)
+
+- name: Patch argocd-secret with local account password hashes
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+    kubectl -n "$ns" patch secret argocd-secret --type='merge' -p='{{ {"stringData": (argocd_local_accounts_secret_patch_data | default({}))} | to_json }}'
+  args:
+    executable: /bin/bash
+  when: argocd_enable_local_accounts | default(false)
+
+- name: Restart argocd-server to reload account config
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+    kubectl -n "$ns" rollout restart deploy/argocd-server
+    kubectl -n "$ns" rollout status deploy/argocd-server --timeout=180s
+  args:
+    executable: /bin/bash
+  when: argocd_enable_local_accounts | default(false)
+
+- name: Assert SSH known hosts lines when known hosts ConfigMap is enabled
+  assert:
+    that:
+      - argocd_ssh_known_hosts_entries is defined
+      - (argocd_ssh_known_hosts_entries | length) > 0
+    fail_msg: "SSH known-hosts enabled but argocd_ssh_known_hosts_entries is missing/empty."
+  when: argocd_enable_ssh_known_hosts_config | default(false)
+
+- name: Render Argo CD SSH known hosts ConfigMap
+  template:
+    src: argocd_ssh_known_hosts_cm.yml.j2
+    dest: /tmp/argocd-ssh-known-hosts-cm.yml
+    mode: "0644"
+  when: argocd_enable_ssh_known_hosts_config | default(false)
+
+- name: Validate Argo CD SSH known hosts ConfigMap YAML (kubectl client dry-run)
+  shell: |
+    set -euo pipefail
+    kubectl apply --dry-run=client -f /tmp/argocd-ssh-known-hosts-cm.yml >/dev/null
+  args:
+    executable: /bin/bash
+  when: argocd_enable_ssh_known_hosts_config | default(false)
+
+- name: Apply Argo CD SSH known hosts ConfigMap
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-ssh-known-hosts-cm.yml
+  args:
+    executable: /bin/bash
+  when: argocd_enable_ssh_known_hosts_config | default(false)
+
+- name: Patch argocd-server pod security context
+  shell: |
+    set -euo pipefail
+    ns="{{ argocd_namespace }}"
+    kubectl -n "$ns" patch deploy argocd-server --type='merge' -p='{{ argocd_server_deployment_patch | to_json }}'
+  args:
+    executable: /bin/bash
+  when: argocd_enable_server_security_patch | default(false)
+
+- name: Render Argo CD server network policy
+  template:
+    src: argocd_networkpolicy.yml.j2
+    dest: /tmp/argocd-server-networkpolicy.yml
+    mode: "0644"
+  when: argocd_enable_network_policy | default(false)
+
+- name: Validate Argo CD server network policy YAML (kubectl client dry-run)
+  shell: |
+    set -euo pipefail
+    kubectl apply --dry-run=client -f /tmp/argocd-server-networkpolicy.yml >/dev/null
+  args:
+    executable: /bin/bash
+  when: argocd_enable_network_policy | default(false)
+
+- name: Apply Argo CD server network policy
+  shell: |
+    set -euo pipefail
+    kubectl apply -f /tmp/argocd-server-networkpolicy.yml
+  args:
+    executable: /bin/bash
+  when: argocd_enable_network_policy | default(false)
+
 - name: Wait for Argo CD workloads (deployments + statefulsets)
   shell: |
     set -euo pipefail
@@ -162,6 +331,7 @@
     echo
   args:
     executable: /bin/bash
+  when: argocd_show_initial_admin_password | default(true)
 
 - name: Show Argo CD ingress + cert status
   shell: |
