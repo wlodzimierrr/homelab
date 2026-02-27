@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argocd-server-ingress
+  namespace: {{ argocd_namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+{% if argocd_network_policy_allow_same_namespace | default(true) %}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ argocd_namespace }}
+{% endif %}
+{% for peer in (argocd_networkpolicy_ingress_from | default([])) %}
+        -
+{% if peer.namespaceSelector is defined %}
+          namespaceSelector:
+{{ peer.namespaceSelector | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if peer.podSelector is defined %}
+          podSelector:
+{{ peer.podSelector | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% if peer.ipBlock is defined %}
+          ipBlock:
+{{ peer.ipBlock | to_nice_yaml(indent=2) | indent(12, true) }}
+{% endif %}
+{% endfor %}
+      ports:
+        - protocol: TCP
+          port: 8080
