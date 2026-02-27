@@ -6,9 +6,9 @@ metadata:
 data:
 {% for key, value in (argocd_cm_data | default({}) | dictsort) %}
 {% if '\n' in (value | string) %}
-  {{ key }}: |
+  "{{ key }}": |
 {{ value | string | indent(4, true) }}
 {% else %}
-  {{ key }}: {{ value | string | quote }}
+  "{{ key }}": {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
