@@ -4,3 +4,5 @@ resources:
   - ../../base
 commonLabels:
   homelab.env: dev
+patches:
+  - path: patch-deployment.yaml

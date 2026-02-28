@@ -43,7 +43,7 @@ Below is the practical alignment between this roadmap and what appears to alread
 ### Not yet present (major gaps)
 - Application code and manifests for the target platform app (React/FastAPI/Postgres/JWT).
 - CI pipelines for build/test/publish + image promotion automation.
-- GitOps apps-repo structure for multi-environment promotion.
+- GitOps workloads-repo structure for multi-environment promotion.
 - Secrets-as-code workflow (SOPS/Sealed Secrets) and rotation automation.
 - Observability stack and runbooks (Prometheus/Grafana/Loki dashboards/alerts).
 
@@ -157,7 +157,7 @@ Recommended immediate relabeling:
 
 ### E0.2 GitOps repository topology and standards
 
-#### T0.2.1 Create dedicated apps repo skeleton
+#### T0.2.1 Create dedicated workloads repo skeleton
 - **Description:** Build a separate repo for app manifests with `bootstrap/`, `platform/`, `apps/`, and environment folders.
 - **Acceptance Criteria:**
   - Repo contains documented folder conventions.
@@ -570,7 +570,7 @@ Practical checkpoint rule: do not advance phases unless current phase has at lea
 ## Architectural evolution diagram (textual)
 
 ### Stage A (Foundation)
-Developer push → Git (infra/apps repos) → Argo CD sync → K3s cluster resources.
+Developer push → Git (infra/workloads repos) → Argo CD sync → K3s cluster resources.
 
 ### Stage B (Vertical slice)
 User → Ingress → React frontend → FastAPI backend → PostgreSQL.

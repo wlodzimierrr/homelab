@@ -1,4 +1,4 @@
-# Homelab GitOps Apps Repository Skeleton
+# Homelab GitOps Workloads Repository Skeleton
 
 This directory is a starter layout for a dedicated manifests repository.
 
@@ -35,3 +35,30 @@ Use these exact paths in Argo CD `spec.source.path`.
 
 - `repoURL` is intentionally a placeholder in example Applications. Replace it with your dedicated repo URL.
 - Environment folders use Kustomize overlays for clear, explicit promotion boundaries.
+
+## Layering Strategy
+
+- Decision: use Kustomize base + overlays for dev/prod layering.
+- Scope: default for platform and app manifests in this repo.
+- Exception: when third-party Helm charts are required, keep Argo CD paths environment-scoped and preserve the same folder conventions.
+
+## Example App: base + overlay
+
+`apps/homelab-api` demonstrates the pattern:
+
+- Base:
+  - `apps/homelab-api/base/deployment.yaml`
+  - `apps/homelab-api/base/service.yaml`
+- Dev overlay:
+  - `apps/homelab-api/envs/dev/kustomization.yaml`
+  - `apps/homelab-api/envs/dev/patch-deployment.yaml`
+- Prod overlay:
+  - `apps/homelab-api/envs/prod/kustomization.yaml`
+  - `apps/homelab-api/envs/prod/patch-deployment.yaml`
+
+## Promotion Path (dev -> prod)
+
+1. Validate changes in `apps/homelab-api/envs/dev`.
+2. Promote by PR: update prod overlay (typically image tag in `apps/homelab-api/envs/prod/patch-deployment.yaml`).
+3. Merge after checks; Argo CD reconciles `apps/homelab-api/envs/prod`.
+4. Roll back by reverting the promotion commit.
