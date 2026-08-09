@@ -6,7 +6,7 @@ This runbook configures centralized SSO for both Argo CD and Portal ingress.
 
 Create two GitHub OAuth apps:
 
-1. Argo CD app callback: `https://argocd.wlodzimierrr.co.uk/api/dex/callback`
+1. Argo CD app callback: `https://argocd.wlodzimierrr.pl/api/dex/callback`
 2. Portal app callback: `http://portal.dev.homelab.local/oauth2/callback`
 
 ## 2. Configure Argo CD Dex (GitHub) and RBAC
@@ -77,7 +77,7 @@ Set these env vars in API deployment per environment as needed.
 Argo CD claim mapping:
 
 ```bash
-argocd login argocd.wlodzimierrr.co.uk --sso
+argocd login argocd.wlodzimierrr.pl --sso
 argocd account get-user-info
 ```
 

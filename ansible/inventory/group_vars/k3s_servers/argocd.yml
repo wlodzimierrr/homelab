@@ -1,6 +1,6 @@
 argocd_version: "v2.12.4"
 argocd_namespace: "argocd"
-argocd_hostname: "argocd.wlodzimierrr.co.uk"
+argocd_hostname: "argocd.wlodzimierrr.pl"
 
 traefik_ingress_class: "traefik"
 clusterissuer_name: "letsencrypt-http01"
@@ -20,7 +20,7 @@ argocd_rbac_extra_data: {}
 
 argocd_enable_main_config: true
 argocd_cm_data:
-  url: "https://argocd.wlodzimierrr.co.uk"
+  url: "https://argocd.wlodzimierrr.pl"
   "server.insecure": "false"
   "admin.enabled": "false"
   "kustomize.buildOptions": "--enable-alpha-plugins --enable-exec"

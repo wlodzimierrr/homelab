@@ -22,7 +22,7 @@ flowchart TB
     CertMgr["cert-manager"]
 
     subgraph ArgoNS["argocd namespace"]
-      Argo["Argo CD\nroot + child apps\nargocd.wlodzimierrr.co.uk"]
+      Argo["Argo CD\nroot + child apps\nargocd.wlodzimierrr.pl"]
       Dex["Dex GitHub connector"]
     end
 
